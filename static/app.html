@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+
+<body>
+    <div id="exchanges">
+        <div>
+            Binance <span id="binance">Connecting...</span>
+        </div>
+        <div>
+            Wazirx <span id="wazirx">Connecting...</span>
+        </div>
+        <div>
+            Kucoin <span id="kucoin">Connecting...</span>
+        </div>
+    </div>
+    <table id="table"></table>
+    <button id="disconnect">Disconnect</button>
+</body>
+
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.12.0/css/jquery.dataTables.css">
+<script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.12.0/js/jquery.dataTables.js"></script>
+
+<script>
+
+    const exchanges = [];
+    const data = {
+        data: {}, // {"symbol": {"binance": {a: 1, b: 1}, "wazirx": {a: 2, b: 2}}},
+    };
+
+    function Exchange(args) {
+        this.name = args.name;
+        this.id = args.name;
+        this.websocketUrl = args.websocketUrl;
+        this.allTickerSubscribe = args.allTickerSubscribe;
+        this.socket = this.getSocket();
+        console.log(this.socket);
+        this.socket.addEventListener('open', this.onopen.bind(this));
+        this.socket.addEventListener('message', args.onDataRecieved);
+        this.socket.addEventListener('close', this.onclose.bind(this));
+        this.socket.addEventListener('error', this.onerror.bind(this));
+        if (args.pingTime  &&  args.pingMessage){
+            setInterval(() => {
+                this.socket.send(JSON.stringify(args.pingMessage));
+            }, args.pingTime);
+        }
+        exchanges.push(this);
+    }
+
+    Exchange.prototype = {
+        getSocket: function () {
+            console.log("Connecting binance...");
+            return new WebSocket(this.websocketUrl);
+        },
+        onopen: function (event) {
+            console.log(this.socket);
+            if (this.allTickerSubscribe) {
+                this.socket.send(JSON.stringify(this.allTickerSubscribe));
+            }
+            document.getElementById(this.id).innerHTML = "Connected";
+        },
+        onclose: function (event) {
+            document.getElementById(this.id).innerHTML = "Connection Closed";
+        },
+        onerror: function (event) {
+            document.getElementById(this.id).innerHTML = "Connection Failed";
+        }
+    }
+
+    const binance = new Exchange({
+        name: "binance",
+        // websocketUrl: "wss://dex.binance.org/api/ws/",
+        websocketUrl: "wss://stream.binance.com:9443/ws/!ticker@arr",
+        // allTickerSubscribe: { method: "subscribe", topic: "allTickers", symbols: ["$all"] },
+        onDataRecieved: function (event) {
+            JSON.parse(event.data).forEach(item => {
+                let s = item["s"].toLowerCase();
+                if (!(s in data.data)) {
+                    data.data[s] = {};
+                }
+                if (!("binance" in data.data[s])) {
+                    data.data[s].binance = {};
+                }
+                data.data[s].binance.a = Number(item.a);
+                data.data[s].binance.b = Number(item.b);
+            });
+        }
+    });
+
+    const wazirx = new Exchange({
+        name: "wazirx",
+        websocketUrl: "wss://stream.wazirx.com/stream",
+        allTickerSubscribe: { "event": "subscribe", "streams": ["!ticker@arr"] },
+        onDataRecieved: function (event) {
+            JSON.parse(event.data).data.forEach(item => {
+                let s = item["s"].toLowerCase();
+                let c = Number(item["c"]);
+                if (!(s in data.data)) {
+                    data.data[s] = {}
+                }
+                if (!("wazirx" in data.data[s])) {
+                    data.data[s].wazirx = {};
+                }
+                data.data[s].wazirx.a = Number(item.b);
+                data.data[s].wazirx.b = Number(item.a);
+            });
+        }
+    })
+
+    // const exchanges = [{name: "wazirx"}, {name: "binance"}];
+
+    // const sampleData = {
+    //     "btcusdt": {"wazirx": {a: 1, b: 1}, "binance": {a: 2, b: 2}},
+    //     "wrxusdt": {"wazirx": {a: 3, b: 3}, "binance": {a: 2, b: 2}},
+    //     "etcusdt": {"wazirx": {a: 1, b: 1}, "binance": {a: 2, b: 2}},
+    //     "ethusdt": {"wazirx": {a: 1, b: 1}, "binance": {a: 2, b: 2}},
+    //     "asdusdt": {"wazirx": {a: 1, b: 1}, "binance": {a: 2, b: 2}},
+    //     "asdausdt": {"wazirx": {a: 1, b: 1}, "binance": {a: 2, b: 2}},
+    //     "asdusdt": {"wazirx": {a: 1, b: 1}, "binance": {a: 2, b: 2}},
+    //     "ewrqusdt": {"wazirx": {a: 1, b: 1}, "binance": {a: 2, b: 2}},
+    //     "bgfusdt": {"wazirx": {a: 1, b: 1}, "binance": {a: 2, b: 2}},
+    //     "htrusdt": {"wazirx": {a: 1, b: 1}, "binance": {a: 2, b: 2}},
+    //     "fbgyusdt": {"wazirx": {a: 1, b: 1}, "binance": {a: 2, b: 2}},
+    //     "bfeusdt": {"wazirx": {a: 1, b: 1}, "binance": {a: 2, b: 2}},
+    //     "plyusdt": {"wazirx": {a: 1, b: 1}, "binance": {a: 2, b: 2}},
+    // }
+
+    function convertData(rawData) {
+        const result = [];
+        for (const [symbol, exData] of Object.entries(rawData)) {
+            let minAsk = Infinity;
+            let maxBid = -Infinity;
+            let askExchange = "";
+            let bidExchange = "";
+            exchanges.forEach(exchange => {
+                let exchangeName = exchange.name;
+                if (exchangeName in exData){
+                    if (exData[exchangeName].a < minAsk) {
+                        minAsk = exData[exchangeName].a;
+                        askExchange = exchangeName;
+                    }
+                    if (exData[exchangeName].b > maxBid) {
+                        maxBid = exData[exchangeName].b;
+                        bidExchange = exchangeName;
+                    }
+                }
+            });
+            let pd = (minAsk > 0) ? Math.round(100 * (maxBid - minAsk) / minAsk) : 0;
+            result.push({
+                "Symbol": symbol,
+                "Ask Exchange": askExchange,
+                "Ask Price": minAsk,
+                "Bid Exchange": bidExchange,
+                "Bid Price": maxBid,
+                "Percent Difference": pd,
+            });
+        }
+        if (result.length === 0) {
+            result.push({
+                "Symbol": "",
+                "Ask Exchange": "",
+                "Ask Price": "",
+                "Bid Exchange": "",
+                "Bid Price": "",
+                "Percent Difference": 0,
+            })
+        }
+        return result;
+    }
+
+    $(document).ready(function () {
+        $('#table').DataTable({
+            data: [],
+            columns: [
+                { data: 'Symbol', title: "Symbol"},
+                { data: 'Ask Exchange', title: "Ask Exchange" },
+                { data: 'Ask Price', title: "Ask Price" },
+                { data: 'Bid Exchange', title: "Bid Exchange" },
+                { data: 'Bid Price', title: "Bid Price" },
+                { data: 'Percent Difference', title: "Percent Difference", type: "num" },
+            ],
+            order: [[5, 'desc']],
+        });
+        const datatable = $('#table').dataTable();
+        setInterval(() => {
+            datatable.fnClearTable();
+            datatable.fnAddData(convertData(data.data));
+            // datatable.fnAddData(convertData(sampleData));
+        }, 5000);
+    });
+
+    function closeSockets() {
+        exchanges.forEach(exchange => exchange.socket.close());
+        console.log("Sockets closed");
+    }
+
+    document.getElementById("disconnect").addEventListener("click", closeSockets);
+
+    let kucoin;
+    async function initializeKucoin() {
+        const kucoinData = await fetch("/kucoin")
+            .then(response => response.json());
+        
+        kucoin = new Exchange({
+            name: "kucoin",
+            websocketUrl: kucoinData.ws_url+"?token="+kucoinData.token,
+            allTickerSubscribe: {
+                "id": 1545910660739,                          
+                "type": "subscribe",
+                "topic": "/market/ticker:all",
+                "response": true                              
+            },
+            pingTime: 8000,
+            pingMessage: {
+                "id":"1545910590801",
+                "type":"ping"
+            },
+            onDataRecieved: function (event) {
+                const rdata = JSON.parse(event.data);
+                let s = rdata["subject"];
+                if (typeof(s) === "string"){
+                    s = s.replace("-", "").toLowerCase();
+                } else {
+                    console.log(rdata, typeof(s));
+                    return
+                }
+                const item = rdata.data;
+                if (!(s in data.data)) {
+                    data.data[s] = {}
+                }
+                if (!("kucoin" in data.data[s])) {
+                    data.data[s].kucoin = {};
+                }
+                data.data[s].kucoin.a = Number(item.bestAsk);
+                data.data[s].kucoin.b = Number(item.bestBid);
+            }
+        })
+    }
+    initializeKucoin();
+
+</script>
+
+</html>
