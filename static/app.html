@@ -22,6 +22,11 @@
     </div>
     <table id="table"></table>
     <button id="disconnect">Disconnect</button>
+    <div>
+        <label for="frequency">Frequency (in seconds)</label>
+        <input type="text" name="frequency" id="frequency">
+        <button>Ok</button>
+    </div>
 </body>
 
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
@@ -34,6 +39,10 @@
     const data = {
         data: {}, // {"symbol": {"binance": {a: 1, b: 1}, "wazirx": {a: 2, b: 2}}},
     };
+    let updaterId;
+    let frequency = 5;
+    const frequencyInput = document.getElementById("frequency");
+    frequencyInput.value = frequency;
 
     function Exchange(args) {
         this.name = args.name;
@@ -152,7 +161,7 @@
                     }
                 }
             });
-            let pd = (minAsk > 0) ? Math.round(100 * (maxBid - minAsk) / minAsk) : 0;
+            let pd = (minAsk > 0) ? (100 * (maxBid - minAsk) / minAsk).toFixed(1) : 0;
             result.push({
                 "Symbol": symbol,
                 "Ask Exchange": askExchange,
@@ -189,11 +198,20 @@
             order: [[5, 'desc']],
         });
         const datatable = $('#table').dataTable();
-        setInterval(() => {
+        function refreshTable() {
             datatable.fnClearTable();
             datatable.fnAddData(convertData(data.data));
             // datatable.fnAddData(convertData(sampleData));
-        }, 5000);
+        }
+        function resetFrequency() {
+            if (updaterId){
+                clearInterval(updaterId);
+            }
+            updaterId = setInterval(refreshTable, frequency*1000);
+        }
+        resetFrequency();
+        frequencyInput.addEventListener("change", e => frequency=Number(e.currentTarget.value));
+        frequencyInput.addEventListener("change", resetFrequency);
     });
 
     function closeSockets() {
