@@ -19,6 +19,9 @@
         <div>
             Kucoin <span id="kucoin">Connecting...</span>
         </div>
+        <div>
+            Huobi <span id="huobi">Connecting...</span>
+        </div>
     </div>
     <table id="table"></table>
     <button id="disconnect">Disconnect</button>
@@ -76,7 +79,7 @@
             document.getElementById(this.id).innerHTML = "Connected";
         },
         onclose: function (event) {
-            document.getElementById(this.id).innerHTML = "Connection Closed";
+            document.getElementById(this.id).innerHTML = "Disconnected";
         },
         onerror: function (event) {
             document.getElementById(this.id).innerHTML = "Connection Failed";
@@ -215,7 +218,14 @@
     });
 
     function closeSockets() {
-        exchanges.forEach(exchange => exchange.socket.close());
+        exchanges.forEach(exchange => {
+            if ("socket" in exchange){
+                exchange.socket.close()
+            } else {
+                exchange.close();
+            }
+        });
+        huobi.close();
         console.log("Sockets closed");
     }
 
@@ -262,6 +272,51 @@
         })
     }
     initializeKucoin();
+
+    
+    function Huobi() {
+        this.name = "huobi";
+        this.id = "huobi";
+        this.frequency = 5;
+        this.open();
+        exchanges.push(this);
+    }
+
+    Huobi.prototype = {
+        open: function () {
+            this.pollId = setInterval(this.fetchData, this.frequency*1000);
+            document.getElementById(this.id).innerHTML = "Connected";
+        },
+        updateFrequency: function (newFrequency) {
+            this.frequency = newFrequency;
+            this.close();
+            this.open();
+        },
+        close: function () {
+            clearInterval(this.pollId);
+            document.getElementById(this.id).innerHTML = "Disconnected";
+        },
+        fetchData: function () {
+            fetch("https://api.huobi.pro/market/tickers")
+            .then(response => response.json())
+            .then(Huobi.prototype.onDataRecieved);
+        },
+        onDataRecieved: function (rdata) {
+            rdata.data.forEach(item => {
+                let s = item["symbol"];
+                if (!(s in data.data)) {
+                    data.data[s] = {}
+                }
+                if (!("huobi" in data.data[s])) {
+                    data.data[s].huobi = {};
+                }
+                data.data[s].huobi.a = Number(item.ask);
+                data.data[s].huobi.b = Number(item.bid);
+            });
+        }
+    }
+    const huobi = new Huobi();
+
 
 </script>
 
