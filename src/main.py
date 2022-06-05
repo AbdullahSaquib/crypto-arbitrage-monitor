@@ -24,3 +24,11 @@ async def get_kucoin():
             "token": data["token"],
             "ws_url": data["instanceServers"][0]["endpoint"]
         }
+
+@app.get("/bitmart")
+async def get_bitmart():
+    async with httpx.AsyncClient() as client:
+        r = await asyncio.gather(
+            client.get("https://api-cloud.bitmart.com/spot/v1/ticker")
+        )
+        return r[0].json()
