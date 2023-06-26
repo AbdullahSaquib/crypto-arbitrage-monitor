@@ -194,7 +194,10 @@
             if (this.allTickerSubscribe) {
                 this.socket.send(JSON.stringify(this.allTickerSubscribe));
             }
-            document.getElementById(this.id).innerHTML = "Connected";
+            const span = document.getElementById(this.id);
+            span.innerHTML = "Connected";
+            span.style.color = "green";
+
         },
         onclose: function (event) {
             document.getElementById(this.id).innerHTML = "Disconnected";
@@ -404,7 +407,9 @@
     Huobi.prototype = {
         open: function () {
             this.pollId = setInterval(this.fetchData, this.frequency*1000);
-            document.getElementById(this.id).innerHTML = "Connected";
+            const span = document.getElementById(this.id);
+            span.innerHTML = "Connected";
+            span.style.color = "green";
         },
         updateFrequency: function (newFrequency) {
             this.frequency = newFrequency;
