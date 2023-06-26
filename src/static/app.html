@@ -11,20 +11,37 @@
 <body>
     <div id="exchanges">
         <div>
+            <input type="checkbox" name="exchange" id="binance-checkbox" checked value="binance">
+            <label for="binance-checkbox">
             Binance <span id="binance">Connecting...</span>
+            </label>
         </div>
         <div>
+            <input type="checkbox" name="exchange" id="wazirx-checkbox" checked value="wazirx">
+            <label for="wazirx-checkbox">
             Wazirx <span id="wazirx">Connecting...</span>
+            </label>
         </div>
-        <div>
+        <!-- <div>
+            <input type="checkbox" name="exchange" id="kucoin-checkbox" checked value="kucoin">
+            <label for="kucoin-checkbox">
             Kucoin <span id="kucoin">Connecting...</span>
-        </div>
+            </label>
+        </div> -->
         <div>
+            <input type="checkbox" name="exchange" id="huobi-checkbox" checked value="huobi">
+            <label for="huobi-checkbox">
             Huobi <span id="huobi">Connecting...</span>
+            </label>
         </div>
+        <!-- <div>
+            <input type="checkbox" name="exchange" id="bitmart-checkbox" checked value="bitmart">
+            <label for="bitmart-checkbox">
+            Bitmart <span id="bitmart">Connecting...</span>
+            </label>
+        </div> -->
     </div>
     <table id="table"></table>
-    <button id="disconnect">Disconnect</button>
     <div>
         <label for="frequency">Frequency (in seconds)</label>
         <input type="text" name="frequency" id="frequency">
@@ -50,26 +67,47 @@
     function Exchange(args) {
         this.name = args.name;
         this.id = args.name;
+        this.checkboxId = this.id + "-checkbox";
+        this.selected = true;
         this.websocketUrl = args.websocketUrl;
         this.allTickerSubscribe = args.allTickerSubscribe;
-        this.socket = this.getSocket();
-        console.log(this.socket);
-        this.socket.addEventListener('open', this.onopen.bind(this));
-        this.socket.addEventListener('message', args.onDataRecieved);
-        this.socket.addEventListener('close', this.onclose.bind(this));
-        this.socket.addEventListener('error', this.onerror.bind(this));
-        if (args.pingTime  &&  args.pingMessage){
-            setInterval(() => {
-                this.socket.send(JSON.stringify(args.pingMessage));
-            }, args.pingTime);
-        }
+        this.onDataRecieved = args.onDataRecieved;
+        this.pingerId = null;
+        this.pingTime = args.pingTime;
+        this.pingMessage = args.pingMessage;
+        this.open();
         exchanges.push(this);
+        this.checkbox = document.getElementById(this.checkboxId);
+        this.checkbox.addEventListener('change', e => {
+            this.selected = e.currentTarget.checked;
+            if (this.selected){
+                this.open();
+            } else {
+                this.socket.close();
+            }
+        })
     }
 
     Exchange.prototype = {
         getSocket: function () {
-            console.log("Connecting binance...");
+            console.log(`Connecting ${this.name}...`);
             return new WebSocket(this.websocketUrl);
+        },
+        open: function () {
+            this.socket = this.getSocket();
+            this.socket.addEventListener('open', this.onopen.bind(this));
+            this.socket.addEventListener('message', this.onDataRecieved);
+            this.socket.addEventListener('close', this.onclose.bind(this));
+            this.socket.addEventListener('error', this.onerror.bind(this));
+            if (this.pingTime  &&  this.pingMessage){
+                this.pingerId = setInterval(() => {
+                    this.socket.send(JSON.stringify(this.pingMessage));
+                }, this.pingTime);
+            }
+        },
+        close: function () {
+            this.socket.close();
+            clearInterval(this.pingerId);
         },
         onopen: function (event) {
             console.log(this.socket);
@@ -120,8 +158,8 @@
                 if (!("wazirx" in data.data[s])) {
                     data.data[s].wazirx = {};
                 }
-                data.data[s].wazirx.a = Number(item.b);
-                data.data[s].wazirx.b = Number(item.a);
+                data.data[s].wazirx.a = Number(item.a);
+                data.data[s].wazirx.b = Number(item.b);
             });
         }
     })
@@ -152,6 +190,7 @@
             let askExchange = "";
             let bidExchange = "";
             exchanges.forEach(exchange => {
+                if (!exchange.selected) return;
                 let exchangeName = exchange.name;
                 if (exchangeName in exData){
                     if (exData[exchangeName].a < minAsk) {
@@ -165,14 +204,16 @@
                 }
             });
             let pd = (minAsk > 0) ? (100 * (maxBid - minAsk) / minAsk).toFixed(1) : 0;
-            result.push({
-                "Symbol": symbol,
-                "Ask Exchange": askExchange,
-                "Ask Price": minAsk,
-                "Bid Exchange": bidExchange,
-                "Bid Price": maxBid,
-                "Percent Difference": pd,
-            });
+            if (isValidNumber(minAsk) && isValidNumber(maxBid)) {
+                result.push({
+                    "Symbol": symbol,
+                    "Ask Exchange": askExchange,
+                    "Ask Price": minAsk,
+                    "Bid Exchange": bidExchange,
+                    "Bid Price": maxBid,
+                    "Percent Difference": pd,
+                });
+            }
         }
         if (result.length === 0) {
             result.push({
@@ -217,19 +258,6 @@
         frequencyInput.addEventListener("change", resetFrequency);
     });
 
-    function closeSockets() {
-        exchanges.forEach(exchange => {
-            if ("socket" in exchange){
-                exchange.socket.close()
-            } else {
-                exchange.close();
-            }
-        });
-        huobi.close();
-        console.log("Sockets closed");
-    }
-
-    document.getElementById("disconnect").addEventListener("click", closeSockets);
 
     let kucoin;
     async function initializeKucoin() {
@@ -271,15 +299,26 @@
             }
         })
     }
-    initializeKucoin();
+    // initializeKucoin();
 
     
     function Huobi() {
         this.name = "huobi";
         this.id = "huobi";
+        this.checkboxId = this.id + "-checkbox";
+        this.selected = true;
         this.frequency = 5;
         this.open();
         exchanges.push(this);
+        this.checkbox = document.getElementById(this.checkboxId);
+        this.checkbox.addEventListener('change', e => {
+            this.selected = e.currentTarget.checked;
+            if (this.selected){
+                this.open();
+            } else {
+                this.close();
+            }
+        })
     }
 
     Huobi.prototype = {
@@ -318,6 +357,63 @@
     const huobi = new Huobi();
 
 
+    function Bitmart() {
+        this.name = "bitmart";
+        this.id = "bitmart";
+        this.checkboxId = this.id + "-checkbox";
+        this.selected = true;
+        this.frequency = 5;
+        this.open();
+        exchanges.push(this);
+        this.checkbox = document.getElementById(this.checkboxId);
+        this.checkbox.addEventListener('change', e => {
+            this.selected = e.currentTarget.checked;
+            if (this.selected) {
+                this.open();
+            } else {
+                this.close();
+            }
+        })
+    }
+
+    Bitmart.prototype = {
+        open: function () {
+            this.pollId = setInterval(this.fetchData, this.frequency*1000);
+            document.getElementById(this.id).innerHTML = "Connected";
+        },
+        updateFrequency: function (newFrequency) {
+            this.frequency = newFrequency;
+            this.close();
+            this.open();
+        },
+        close: function () {
+            clearInterval(this.pollId);
+            document.getElementById(this.id).innerHTML = "Disconnected";
+        },
+        fetchData: function () {
+            fetch("/bitmart")
+            .then(response => response.json())
+            .then(Bitmart.prototype.onDataRecieved);
+        },
+        onDataRecieved: function (rdata) {
+            rdata.data.tickers.forEach(item => {
+                let s = item["symbol"].replace("_", "").toLowerCase();
+                if (!(s in data.data)) {
+                    data.data[s] = {}
+                }
+                if (!("bitmart" in data.data[s])) {
+                    data.data[s].bitmart = {};
+                }
+                data.data[s].bitmart.a = Number(item.best_ask);
+                data.data[s].bitmart.b = Number(item.best_bid);
+            });
+        }
+    }
+    // const bitmart = new Bitmart();
+
+    function isValidNumber(value) {
+        return typeof(value) === "number" && !([0, NaN, Infinity, -Infinity].includes(value));
+    }
 </script>
 
 </html>
